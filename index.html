@@ -153,27 +153,35 @@
         var fs = require('fs');
         var webSocket = null;
 
+        var running = false;
+
         workspacePlayground.addChangeListener((event) => {
             codeTextArea.innerText = Blockly.JavaScript.workspaceToCode(workspacePlayground);
         });
 
         deployButton.onclick = (evt) => {
-            var code = Blockly.JavaScript.workspaceToCode(workspacePlayground);
-            fs.writeFile('generatedModule.js', `const sleep = require('sleep'); ${code} process.exit();`, (err) => {
-                if (err) throw err;
+            if (!running) {
+                var code = Blockly.JavaScript.workspaceToCode(workspacePlayground);
+                fs.writeFile('generatedModule.js', `const sleep = require('sleep'); ${code} process.exit();`, (err) => {
+                    if (err) throw err;
 
-                console.log('Saved File, executing now...');
-                var nodeProcess = fork('./generatedModule.js', [], {
-                    stdio: 'pipe'
+                    console.log('Saved File, executing now...');
+                    var nodeProcess = fork('./generatedModule.js', [], {
+                        stdio: 'pipe'
+                    });
+                    running = true;
+                    nodeProcess.stdout.on('data', (data) => {
+                        console.log(data.toString());
+                        webSocket.send(data.toString());
+                    });
+                    nodeProcess.stderr.on('data', (data) => {
+                        console.log(data.toString());
+                    });
+                    nodeProcess.on('close', (res) => {
+                        running = false;
+                    });
                 });
-                nodeProcess.stdout.on('data', (data) => {
-                    console.log(data.toString());
-                    webSocket.send(data.toString());
-                });
-                nodeProcess.stderr.on('data', (data) => {
-                    console.log(data.toString());
-                });
-            });
+            }
         };
 
         connectButton.onclick = (evt) => {
